@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meowdoku Solver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #fbf6ee; --card: #fffdf9; --ink: #3b2f2a; --muted: #85766c; --line: #eadfd2;
+    --accent: #e8794a; --accent-ink: #fff; --ok: #3f8f5b; --warn: #b7791f; --bad: #c0453a;
+    --shadow: 0 1px 2px rgba(60,40,30,.06), 0 6px 24px rgba(60,40,30,.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1d1916; --card: #27221e; --ink: #f2e9e1; --muted: #a8998d; --line: #3a322c;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 24px rgba(0,0,0,.25); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 Nunito, system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 28px 18px 60px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  header svg { width: 44px; height: 44px; flex: none; }
+  h1 { font: 600 30px/1.1 Fredoka, Nunito, sans-serif; margin: 0; letter-spacing: .2px; }
+  .sub { color: var(--muted); margin: 0 0 22px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 18px; }
+  #drop { border: 2px dashed var(--line); text-align: center; padding: 34px 18px; cursor: pointer; transition: border-color .15s, background .15s; }
+  #drop.over, #drop:hover { border-color: var(--accent); }
+  #drop strong { font: 600 19px Fredoka, Nunito, sans-serif; display: block; margin-bottom: 4px; }
+  #drop .muted { color: var(--muted); font-size: 14px; }
+  .manual { margin-top: 12px; font-size: 14px; color: var(--muted); display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  button, select { font: 600 14px Nunito, sans-serif; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button:disabled { opacity: .45; cursor: default; }
+  .linkish { background: none; border: none; color: var(--accent); padding: 0; text-decoration: underline; }
+  #work { display: none; margin-top: 20px; gap: 20px; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); align-items: start; }
+  #work.show { display: grid; }
+  @media (max-width: 760px) { #work.show { grid-template-columns: 1fr; } #shotCard { order: 2; } }
+  h2 { font: 600 18px Fredoka, Nunito, sans-serif; margin: 0 0 10px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  #shotWrap { text-align: center; }
+  #shot { max-width: 100%; max-height: 62vh; border-radius: 10px; touch-action: none; cursor: crosshair; background: #0001; }
+  #status { border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; font-weight: 700; display: flex; gap: 10px; align-items: flex-start; }
+  #status.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+  #status.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+  #status.bad { background: color-mix(in srgb, var(--bad) 13%, transparent); color: var(--bad); }
+  #status.busy { background: color-mix(in srgb, var(--muted) 14%, transparent); color: var(--muted); }
+  #status span.small { display: block; font-weight: 600; font-size: 13px; opacity: .9; }
+  #grid { display: grid; width: min(100%, 480px); aspect-ratio: 1; margin: 0 auto; border: 3px solid #2b2420; border-radius: 6px; overflow: hidden; user-select: none; touch-action: manipulation; }
+  .cell { border: 0 solid rgba(40,30,25,.22); display: flex; align-items: center; justify-content: center; font-size: var(--fs, 24px); padding: 0; border-radius: 0; cursor: pointer; color: #2b2420; line-height: 1; }
+  .cell.unset { background: repeating-linear-gradient(45deg, #ddd 0 6px, #eee 6px 12px); }
+  .cell .cat { animation: pop .25s ease-out; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+  @keyframes pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #palette { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; justify-content: center; }
+  .chip { width: 34px; height: 34px; border-radius: 9px; border: 2px solid rgba(0,0,0,.18); padding: 0; font-size: 11px; color: #2b2420; }
+  .chip.sel { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .reveal { justify-content: center; margin-top: 14px; }
+  footer { color: var(--muted); font-size: 13px; margin-top: 28px; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 8 L24 20 Q32 17 40 20 L54 8 L56 34 Q56 54 32 56 Q8 54 8 34 Z" fill="#e8794a"/><circle cx="23" cy="34" r="3.6" fill="#3b2f2a"/><circle cx="41" cy="34" r="3.6" fill="#3b2f2a"/><path d="M29 41 h6 l-3 3 z" fill="#3b2f2a"/><path d="M32 44 q-4 5 -8 2 M32 44 q4 5 8 2" stroke="#3b2f2a" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    <h1>Meowdoku Solver</h1>
+  </header>
+  <p class="sub">One cat per row, column and coloured room, and no two cats touching, not even diagonally. Add a screenshot and the cats appear.</p>
+
+  <div id="drop" class="card" tabindex="0" role="button" aria-label="Choose a screenshot">
+    <strong>Drop a screenshot here</strong>
+    <div class="muted">or tap to choose one · or paste with Ctrl/⌘ + V</div>
+    <input id="file" type="file" accept="image/*" hidden>
+  </div>
+  <div class="manual">No screenshot? <button class="linkish" id="manualBtn">Paint a grid by hand</button> of size
+    <select id="manualN"></select></div>
+
+  <section id="work">
+    <div class="card" id="shotCard">
+      <h2>Screenshot</h2>
+      <div class="row">
+        <label for="nSel">Grid</label><select id="nSel"></select>
+        <button id="redetect">Re-detect board</button>
+      </div>
+      <div id="shotWrap"><canvas id="shot"></canvas></div>
+      <p class="hint">The orange box marks the board. If it's off, drag its corners (or drag inside it to move it) to line it up with the grid.</p>
+    </div>
+    <div class="card">
+      <h2>Puzzle</h2>
+      <div id="status" class="busy">Waiting for a puzzle…</div>
+      <div id="grid"></div>
+      <div class="row reveal">
+        <button id="hideBtn">Hide cats</button>
+        <button id="oneBtn">Reveal one</button>
+        <button id="allBtn" class="primary">Show all</button>
+      </div>
+      <div id="palette"></div>
+      <p class="hint" id="paletteHint">Does a room look wrong? Pick its colour above, then tap the cells that belong to it. The solver reruns as you paint.</p>
+    </div>
+  </section>
+  <footer>Everything runs in your browser. Your screenshot never leaves this page.</footer>
+</main>
+
+<script>
+/*__CORE__*/
+</script>
+<script>
+(() => {
+  const C = MeowCore, $ = id => document.getElementById(id);
+  const DEFAULT_COLORS = [[255,183,178],[255,218,158],[250,240,140],[178,226,178],[170,210,240],[204,180,240],[255,200,230],[190,235,230],[230,200,170],[205,205,205],[255,160,120],[150,200,150],[180,180,255],[240,230,140],[220,170,200],[160,220,255]];
+  const S = { img: null, canvasImg: null, box: null, nChoice: 'auto', n: 8, detectedN: null, regions: [], palette: [], sel: 0, sol: null, reveal: Infinity, edges: null, manual: false };
+
+  // ---------- setup ----------
+  for (let n = C.MIN_N; n <= C.MAX_N; n++) {
+    $('manualN').add(new Option(`${n} × ${n}`, n));
+  }
+  $('manualN').value = 8;
+  function fillNSel() {
+    const s = $('nSel'); s.innerHTML = '';
+    s.add(new Option(S.detectedN ? `Auto (${S.detectedN} × ${S.detectedN})` : 'Auto', 'auto'));
+    for (let n = C.MIN_N; n <= C.MAX_N; n++) s.add(new Option(`${n} × ${n}`, n));
+    s.value = S.nChoice;
+  }
+
+  // ---------- input ----------
+  const drop = $('drop');
+  drop.addEventListener('click', () => $('file').click());
+  drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', e => { const f = e.target.files[0]; if (f) loadFile(f); e.target.value = ''; });
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/')); if (f) loadFile(f); });
+  window.addEventListener('paste', e => {
+    const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+    if (item) { e.preventDefault(); loadFile(item.getAsFile()); }
+  });
+
+  function loadFile(file) {
+    const url = URL.createObjectURL(file);
+    const im = new Image();
+    im.onload = () => {
+      const scale = Math.min(1, 1400 / Math.max(im.width, im.height));
+      const w = Math.round(im.width * scale), h = Math.round(im.height * scale);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const ctx = cv.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(im, 0, 0, w, h);
+      S.img = ctx.getImageData(0, 0, w, h); S.canvasImg = cv;
+      S.manual = false; S.box = null; S.nChoice = 'auto'; S.edges = null;
+      $('shotCard').style.display = '';
+      $('work').classList.add('show');
+      setStatus('busy', 'Reading the board…');
+      URL.revokeObjectURL(url);
+      setTimeout(() => analyze(true), 30);
+      $('work').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    im.onerror = () => { setStatus('bad', 'That file could not be opened as an image.'); $('work').classList.add('show'); };
+    im.src = url;
+  }
+
+  $('manualBtn').addEventListener('click', () => {
+    S.manual = true; S.img = null; S.n = +$('manualN').value;
+    S.regions = new Array(S.n * S.n).fill(-1);
+    S.palette = DEFAULT_COLORS.slice(0, S.n); S.sel = 0; S.reveal = Infinity;
+    $('shotCard').style.display = 'none';
+    $('work').classList.add('show');
+    resolve();
+    $('work').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // ---------- analysis ----------
+  function analyze(redetectBox) {
+    if (!S.img) return;
+    if (!S.edges) S.edges = C.edgeMaps(S.img);
+    if (redetectBox || !S.box) S.box = C.detectBoard(S.img, S.edges);
+    S.detectedN = C.detectGridSize(S.img, S.box, S.edges).n;
+    S.n = S.nChoice === 'auto' ? S.detectedN : +S.nChoice;
+    const colors = C.sampleCells(S.img, S.box, S.n);
+    const cl = C.clusterColors(colors, S.n);
+    S.regions = cl.regions; S.palette = cl.palette; S.sel = 0; S.reveal = Infinity;
+    fillNSel();
+    resolve();
+  }
+
+  $('nSel').addEventListener('change', e => { S.nChoice = e.target.value; analyze(false); });
+  $('redetect').addEventListener('click', () => { S.nChoice = 'auto'; analyze(true); });
+
+  function resolve() {
+    const res = C.solve(S.regions, S.n, 2);
+    S.sol = res.solutions[0] || null;
+    const used = new Set(S.regions.filter(r => r >= 0)).size;
+    if (res.status === 'unique') setStatus('ok', 'Solved! 🐾', 'This is the only arrangement that fits.');
+    else if (res.status === 'multiple') setStatus('warn', 'Here’s a solution, but more than one fits', 'Real puzzles have exactly one, so a room was probably misread. Check the colours against your screenshot.');
+    else if (res.status === 'none') setStatus('bad', 'No arrangement fits these rooms', 'A cell probably has the wrong colour. Compare with your screenshot and tap to fix it, or adjust the board box.');
+    else if (res.status === 'incomplete') setStatus('busy', `Paint the rooms: pick a colour, tap its cells (${used}/${S.n} rooms so far)`);
+    else if (res.status === 'region-count') setStatus('bad', `Found ${res.regionCount} rooms but the grid is ${S.n} × ${S.n}`, `A ${S.n} × ${S.n} grid needs exactly ${S.n} rooms. Check the grid size, or repaint cells.`);
+    else setStatus('bad', 'The solver gave up', 'This grid is unusually hard; check the rooms.');
+    render();
+  }
+
+  function setStatus(kind, title, small) {
+    const s = $('status'); s.className = kind;
+    s.innerHTML = '';
+    const d = document.createElement('div'); d.textContent = title;
+    if (small) { const sp = document.createElement('span'); sp.className = 'small'; sp.textContent = small; d.appendChild(sp); }
+    s.appendChild(d);
+  }
+
+  // ---------- rendering ----------
+  const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+  const catAt = () => {
+    const set = new Set();
+    if (!S.sol) return set;
+    const order = S.sol.map((c, r) => r * S.n + c);
+    order.slice(0, Math.min(S.reveal, S.n)).forEach(i => set.add(i));
+    return set;
+  };
+
+  function render() {
+    const n = S.n, g = $('grid'), cats = catAt();
+    g.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    g.style.setProperty('--fs', Math.round((g.clientWidth || 360) / n * 0.55) + 'px');
+    g.innerHTML = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      const i = r * n + c, reg = S.regions[i];
+      const b = document.createElement('button');
+      b.className = 'cell' + (reg < 0 ? ' unset' : '');
+      if (reg >= 0) b.style.background = rgb(S.palette[reg] || [200, 200, 200]);
+      const diffL = c > 0 && S.regions[i - 1] !== reg, diffT = r > 0 && S.regions[i - n] !== reg;
+      b.style.borderLeft = c > 0 ? (diffL ? '3px solid #2b2420' : '1px solid rgba(40,30,25,.22)') : '0';
+      b.style.borderTop = r > 0 ? (diffT ? '3px solid #2b2420' : '1px solid rgba(40,30,25,.22)') : '0';
+      b.setAttribute('aria-label', `Row ${r + 1}, column ${c + 1}` + (cats.has(i) ? ', cat' : ''));
+      if (cats.has(i)) { const s = document.createElement('span'); s.className = 'cat'; s.textContent = '🐱'; b.appendChild(s); }
+      b.addEventListener('click', () => paint(i));
+      g.appendChild(b);
+    }
+    const p = $('palette'); p.innerHTML = '';
+    S.palette.forEach((col, k) => {
+      const ch = document.createElement('button');
+      ch.className = 'chip' + (k === S.sel ? ' sel' : '');
+      ch.style.background = rgb(col);
+      ch.title = `Room ${k + 1}`; ch.setAttribute('aria-label', `Paint with room ${k + 1}`);
+      ch.textContent = S.regions.filter(r => r === k).length || '';
+      ch.addEventListener('click', () => { S.sel = k; render(); });
+      p.appendChild(ch);
+    });
+    $('hideBtn').disabled = !S.sol || S.reveal === 0;
+    $('oneBtn').disabled = !S.sol || S.reveal >= n;
+    $('allBtn').disabled = !S.sol || S.reveal >= n;
+    drawShot();
+  }
+
+  function paint(i) {
+    if (S.regions[i] === S.sel) return;
+    S.regions[i] = S.sel;
+    const keep = S.reveal; resolve(); S.reveal = keep; render();
+  }
+
+  $('hideBtn').addEventListener('click', () => { S.reveal = 0; render(); });
+  $('oneBtn').addEventListener('click', () => { S.reveal = Math.min(S.n, (S.reveal >= S.n ? 0 : S.reveal) + 1); render(); });
+  $('allBtn').addEventListener('click', () => { S.reveal = Infinity; render(); });
+
+  // ---------- screenshot canvas + box editing ----------
+  const cv = $('shot'), ctx = cv.getContext('2d');
+  function drawShot() {
+    if (!S.canvasImg || S.manual) return;
+    const { width: W, height: H } = S.canvasImg;
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    ctx.drawImage(S.canvasImg, 0, 0);
+    const b = S.box, n = S.n, u = Math.max(W, H) / 700;
+    ctx.fillStyle = 'rgba(0,0,0,.28)';
+    ctx.fillRect(0, 0, W, b.y); ctx.fillRect(0, b.y + b.h, W, H - b.y - b.h);
+    ctx.fillRect(0, b.y, b.x, b.h); ctx.fillRect(b.x + b.w, b.y, W - b.x - b.w, b.h);
+    ctx.strokeStyle = 'rgba(232,121,74,.55)'; ctx.lineWidth = u;
+    for (let k = 1; k < n; k++) {
+      ctx.beginPath(); ctx.moveTo(b.x + k * b.w / n, b.y); ctx.lineTo(b.x + k * b.w / n, b.y + b.h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(b.x, b.y + k * b.h / n); ctx.lineTo(b.x + b.w, b.y + k * b.h / n); ctx.stroke();
+    }
+    ctx.strokeStyle = '#e8794a'; ctx.lineWidth = 3 * u; ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = '#e8794a';
+    corners().forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 9 * u, 0, 7); ctx.fill(); });
+    const cats = catAt();
+    ctx.font = `${Math.round(Math.min(b.w, b.h) / n * 0.62)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    cats.forEach(i => { const r = Math.floor(i / n), c = i % n; ctx.fillText('🐱', b.x + (c + .5) * b.w / n, b.y + (r + .55) * b.h / n); });
+  }
+  const corners = () => { const b = S.box; return [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]]; };
+  const toImg = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / r.width, (e.clientY - r.top) * cv.height / r.height, cv.width / r.width]; };
+  let drag = null;
+  cv.addEventListener('pointerdown', e => {
+    if (!S.box) return;
+    const [x, y, k] = toImg(e), hit = 26 * k;
+    const ci = corners().findIndex(([cx, cy]) => Math.hypot(cx - x, cy - y) < hit);
+    const b = S.box;
+    if (ci >= 0) drag = { type: 'corner', ci };
+    else if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h) drag = { type: 'move', dx: x - b.x, dy: y - b.y };
+    else return;
+    cv.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const [x, y] = toImg(e), b = S.box, W = cv.width, H = cv.height, min = 40;
+    if (drag.type === 'move') { b.x = Math.max(0, Math.min(W - b.w, x - drag.dx)); b.y = Math.max(0, Math.min(H - b.h, y - drag.dy)); }
+    else {
+      let x0 = b.x, y0 = b.y, x1 = b.x + b.w, y1 = b.y + b.h;
+      const cx = Math.max(0, Math.min(W - 1, x)), cy = Math.max(0, Math.min(H - 1, y));
+      if (drag.ci % 2 === 0) x0 = Math.min(cx, x1 - min); else x1 = Math.max(cx, x0 + min);
+      if (drag.ci < 2) y0 = Math.min(cy, y1 - min); else y1 = Math.max(cy, y0 + min);
+      Object.assign(b, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+    }
+    drawShot();
+  });
+  const endDrag = () => { if (drag) { drag = null; analyze(false); } };
+  cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+
+  window.addEventListener('resize', () => { const g = $('grid'); if (S.n) g.style.setProperty('--fs', Math.round((g.clientWidth || 360) / S.n * 0.55) + 'px'); });
+  fillNSel();
+})();
+</script>
+</body>
+</html>
